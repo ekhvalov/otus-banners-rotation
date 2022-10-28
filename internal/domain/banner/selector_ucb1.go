@@ -18,7 +18,7 @@ type banner struct {
 	score        float64
 }
 
-// TODO: Optimize
+// TODO: Optimize.
 type selector struct {
 	unselectedBanners map[string]*banner
 	selectedBanners   map[string]*banner

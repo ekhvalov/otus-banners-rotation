@@ -131,6 +131,8 @@ func Test_selector_RegisterClickForBanner(t *testing.T) {
 					require.NoError(t, err)
 					require.NotEmpty(t, bannerID)
 					selectedBannersCh <- bannerID
+					//nolint:gosec
+					// This is not critical part, so weak numbers generator is allowed
 					if rand.Float64() < banners[bannerID] {
 						err = (*s).RegisterClickForBanner(bannerID)
 						require.NoError(t, err)
