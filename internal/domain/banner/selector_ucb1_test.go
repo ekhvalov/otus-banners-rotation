@@ -25,6 +25,17 @@ func Test_selector_AddBanner(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorIs(t, ErrBannerAlreadyExist, err)
 	})
+	t.Run("when banner is selected then error should be returned", func(t *testing.T) {
+		s := NewUCB1Selector()
+		err := s.AddBanner("1")
+		require.NoError(t, err)
+		id, err := s.SelectBanner()
+		require.NoError(t, err)
+		require.Equal(t, "1", id)
+		err = s.AddBanner("1")
+		require.Error(t, err)
+		require.ErrorIs(t, ErrBannerAlreadyExist, err)
+	})
 }
 
 func Test_selector_DeleteBanner(t *testing.T) {

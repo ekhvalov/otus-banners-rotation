@@ -24,12 +24,16 @@ type selector struct {
 	selectedBanners   map[string]*banner
 	mu                sync.Mutex
 	maxScoreBannerID  string
+	maxScore          float64
 	totalSelectsCount uint
 }
 
 func (s *selector) AddBanner(bannerID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, ok := s.selectedBanners[bannerID]; ok {
+		return ErrBannerAlreadyExist
+	}
 	if _, ok := s.unselectedBanners[bannerID]; ok {
 		return ErrBannerAlreadyExist
 	}
@@ -48,6 +52,9 @@ func (s *selector) DeleteBanner(bannerID string) error {
 		delete(s.selectedBanners, bannerID)
 		if s.maxScoreBannerID == bannerID {
 			s.maxScoreBannerID = s.getMaxScoreBannerID()
+			if s.maxScoreBannerID != "" {
+				s.maxScore = s.selectedBanners[s.maxScoreBannerID].score
+			}
 		}
 		return nil
 	}
@@ -68,19 +75,18 @@ func (s *selector) SelectBanner() (string, error) {
 		b.selectsCount++
 		b.score = s.calculateBannerScore(b)
 		s.selectedBanners[id] = b
-		s.maxScoreBannerID = s.getMaxScoreBannerID()
+		s.updateMaxScore(id, b)
 		return id, nil
 	}
 	if s.maxScoreBannerID == "" {
 		return "", ErrEmptyBannersList
 	}
-	id := s.maxScoreBannerID
-	b := s.selectedBanners[id]
+	b := s.selectedBanners[s.maxScoreBannerID]
 	b.selectsCount++
 	s.totalSelectsCount++
 	b.score = s.calculateBannerScore(b)
-	s.maxScoreBannerID = s.getMaxScoreBannerID()
-	return id, nil
+	s.updateMaxScore(s.maxScoreBannerID, b)
+	return s.maxScoreBannerID, nil
 }
 
 func (s *selector) RegisterClickForBanner(bannerID string) error {
@@ -89,15 +95,17 @@ func (s *selector) RegisterClickForBanner(bannerID string) error {
 	if b, ok := s.selectedBanners[bannerID]; ok {
 		b.clicksCount++
 		b.score = s.calculateBannerScore(b)
-		s.maxScoreBannerID = s.getMaxScoreBannerID()
+		s.updateMaxScore(bannerID, b)
 		return nil
 	}
 	if b, ok := s.unselectedBanners[bannerID]; ok {
 		delete(s.unselectedBanners, bannerID)
 		b.clicksCount++
+		b.selectsCount++
+		s.totalSelectsCount++
 		b.score = s.calculateBannerScore(b)
 		s.selectedBanners[bannerID] = b
-		s.maxScoreBannerID = s.getMaxScoreBannerID()
+		s.updateMaxScore(bannerID, b)
 		return nil
 	}
 	return ErrBannerNotFound
@@ -118,4 +126,16 @@ func (s *selector) getMaxScoreBannerID() string {
 func (s *selector) calculateBannerScore(b *banner) float64 {
 	bannerRatio := float64(b.clicksCount) / float64(b.selectsCount)
 	return bannerRatio + math.Sqrt((2.0*math.Log(float64(s.totalSelectsCount)))/float64(b.selectsCount))
+}
+
+func (s *selector) updateMaxScore(id string, b *banner) {
+	if id == s.maxScoreBannerID && b.score < s.maxScore { // Current max banner is no longer max.
+		s.maxScoreBannerID = s.getMaxScoreBannerID()
+		s.maxScore = s.selectedBanners[s.maxScoreBannerID].score
+		return
+	}
+	if b.score > s.maxScore {
+		s.maxScoreBannerID = id
+		s.maxScore = b.score
+	}
 }
