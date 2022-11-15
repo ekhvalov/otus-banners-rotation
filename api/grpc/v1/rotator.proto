@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package otus.rotator.v1;
+
+import "google/protobuf/any.proto";
+import "google/rpc/code.proto";
+
+option go_package = "./;grpc";
+
+// https://cloud.google.com/apis/design
+// Manages banners, slots and social groups in a simple banners rotation system.
+service Rotator {
+  rpc CreateBanner(CreateBannerRequest) returns (CreateBannerResponse) {}
+  rpc DeleteBanner(DeleteBannerRequest) returns (DeleteBannerResponse) {}
+  rpc CreateSlot(CreateSlotRequest) returns (CreateSlotResponse) {}
+  rpc DeleteSlot(DeleteSlotRequest) returns (DeleteSlotResponse) {}
+  rpc CreateSocialGroup(CreateSocialGroupRequest) returns (CreateSocialGroupResponse) {}
+  rpc DeleteSocialGroup(DeleteSocialGroupRequest) returns (DeleteSocialGroupResponse) {}
+  rpc AttachBanner(AttachBannerRequest) returns (AttachBannerResponse) {}
+  rpc DetachBanner(DetachBannerRequest) returns (DetachBannerResponse) {}
+  rpc ClickBanner(ClickBannerRequest) returns (ClickBannerResponse) {}
+  rpc SelectBanner(SelectBannerRequest) returns (SelectBannerResponse) {}
+}
+
+message CreateBannerRequest {
+  // Required.
+  string description = 1;
+}
+
+message CreateBannerResponse {
+  Status status = 1;
+  string id = 2;
+}
+
+message DeleteBannerRequest {
+  // Required.
+  string id = 1;
+}
+
+message DeleteBannerResponse {
+  Status status = 1;
+}
+
+message CreateSlotRequest {
+  // Required.
+  string description = 1;
+}
+
+message CreateSlotResponse {
+  Status status = 1;
+  string id = 2;
+}
+
+message DeleteSlotRequest {
+  // Required.
+  string id = 1;
+}
+
+message DeleteSlotResponse {
+  Status status = 1;
+}
+
+message CreateSocialGroupRequest {
+  // Required.
+  string description = 1;
+}
+
+message CreateSocialGroupResponse {
+  Status status = 1;
+  string id = 2;
+}
+
+message DeleteSocialGroupRequest {
+  // Required.
+  string id = 1;
+}
+
+message DeleteSocialGroupResponse {
+  Status status = 1;
+}
+
+message AttachBannerRequest {
+  // Required.
+  string slot_id = 1;
+  // Required.
+  string banner_id = 2;
+}
+
+message AttachBannerResponse {
+  Status status = 1;
+}
+
+message DetachBannerRequest {
+  // Required.
+  string slot_id = 1;
+  // Required.
+  string banner_id = 2;
+}
+
+message DetachBannerResponse {
+  Status status = 1;
+}
+
+message ClickBannerRequest {
+  // Required.
+  string slot_id = 1;
+  // Required.
+  string banner_id = 2;
+  // Required.
+  string social_group_id = 3;
+}
+
+message ClickBannerResponse {
+  Status status = 1;
+}
+
+message SelectBannerRequest {
+  // Required.
+  string slot_id = 1;
+  // Required.
+  string social_group_id = 2;
+}
+
+message SelectBannerResponse {
+  Status status = 1;
+  string banner_id = 2;
+}
+
+message Status {
+  google.rpc.Code code = 1;
+  string message = 2;
+  repeated google.protobuf.Any details = 3;
+}
+
+// A banner resource in the Rotator API.
+message Banner {
+  string id = 1;
+  string description = 2;
+}
+
+// A slot resource in the Rotator API.
+message Slot {
+  string id = 1;
+  string description = 2;
+}
+
+// A social group resource in the Rotator API. A social group is a segmented group of banner viewers.
+message SocialGroup {
+  string id = 1;
+  string description = 2;
+}
