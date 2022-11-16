@@ -1,4 +1,7 @@
 
+generate:
+	go generate github.com/ekhvalov/otus-banners-rotation/internal/environment/server/grpc
+
 test:
 	go test -race -count 100 ./internal/...
 
@@ -11,4 +14,4 @@ install-lint-deps:
 lint: install-lint-deps
 	golangci-lint run ./...
 
-.PHONY: test test-simple lint
+.PHONY: generate test test-simple lint
