@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=./mock/storage.gen.go -package mock . Storage
+
 package app
 
 import "context"
