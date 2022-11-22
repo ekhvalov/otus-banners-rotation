@@ -3,6 +3,9 @@ module github.com/ekhvalov/otus-banners-rotation
 go 1.18
 
 require (
+	github.com/go-redis/redis/v9 v9.0.0-rc.1
+	github.com/golang/mock v1.4.4
+	github.com/google/uuid v1.1.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.14.0
@@ -13,7 +16,9 @@ require (
 )
 
 require (
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect

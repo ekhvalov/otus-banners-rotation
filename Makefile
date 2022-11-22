@@ -1,5 +1,6 @@
 
 generate:
+	go generate github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis
 	go generate github.com/ekhvalov/otus-banners-rotation/internal/environment/server/grpc
 
 test:
