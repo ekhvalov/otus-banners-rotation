@@ -3,7 +3,10 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	"github.com/ekhvalov/otus-banners-rotation/internal/app/mock"
@@ -64,7 +67,7 @@ func TestRotator_CreateBanner(t *testing.T) {
 					CreateBanner(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			got, err := rotator.CreateBanner(context.Background(), tt.description)
 
@@ -90,7 +93,7 @@ func TestRotator_CreateSlot(t *testing.T) {
 					CreateSlot(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			got, err := rotator.CreateSlot(context.Background(), tt.description)
 
@@ -116,7 +119,7 @@ func TestRotator_CreateSocialGroup(t *testing.T) {
 					CreateSocialGroup(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			got, err := rotator.CreateSocialGroup(context.Background(), tt.description)
 
@@ -169,7 +172,7 @@ func TestRotator_DeleteBanner(t *testing.T) {
 					DeleteBanner(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			err := rotator.DeleteBanner(context.Background(), tt.id)
 
@@ -193,7 +196,7 @@ func TestRotator_DeleteSlot(t *testing.T) {
 					DeleteSlot(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			err := rotator.DeleteSlot(context.Background(), tt.id)
 
@@ -217,7 +220,7 @@ func TestRotator_DeleteSocialGroup(t *testing.T) {
 					DeleteSocialGroup(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			err := rotator.DeleteSocialGroup(context.Background(), tt.id)
 
@@ -280,7 +283,7 @@ func TestRotator_AttachBanner(t *testing.T) {
 					AttachBanner(context.Background(), tt.mockExpectSlotID, tt.mockExpectBannerID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			err := rotator.AttachBanner(context.Background(), tt.slotID, tt.bannerID)
 
@@ -304,7 +307,7 @@ func TestRotator_DetachBanner(t *testing.T) {
 					DetachBanner(context.Background(), tt.mockExpectSlotID, tt.mockExpectBannerID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage)
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
 
 			err := rotator.DetachBanner(context.Background(), tt.slotID, tt.bannerID)
 
@@ -317,26 +320,60 @@ func TestRotator_DetachBanner(t *testing.T) {
 	}
 }
 
+type eventMatcher struct {
+	event app.Event
+}
+
+func (m eventMatcher) Matches(x interface{}) bool {
+	if x == nil {
+		return false
+	}
+	v1 := reflect.ValueOf(x)
+	v2 := reflect.ValueOf(m.event)
+	if v1.Type() != v2.Type() {
+		return false
+	}
+	event := x.(app.Event)
+	if m.event.Type != event.Type {
+		return false
+	}
+	if m.event.SlotID != event.SlotID {
+		return false
+	}
+	if m.event.BannerID != event.BannerID {
+		return false
+	}
+	if m.event.SocialGroupID != event.SocialGroupID {
+		return false
+	}
+	if event.TimestampMicro == 0 {
+		return false
+	}
+	if event.TimestampMicro < m.event.TimestampMicro {
+		return false
+	}
+	return true
+}
+
+func (m eventMatcher) String() string {
+	return fmt.Sprintf("%v", m.event)
+}
+
 func TestRotator_SelectBanner(t *testing.T) {
 	tests := map[string]struct {
-		mockStorage   func(controller *gomock.Controller) app.Storage
-		slotID        string
-		socialGroupID string
-		wantID        string
-		err           error
+		mockStorage    func(controller *gomock.Controller) app.Storage
+		mockEventQueue func(controller *gomock.Controller) app.EventQueue
+		slotID         string
+		socialGroupID  string
+		wantID         string
+		err            error
 	}{
 		"empty slot id": {
-			mockStorage: func(controller *gomock.Controller) app.Storage {
-				return mock.NewMockStorage(controller)
-			},
 			slotID:        emptyID,
 			socialGroupID: socialGroupID,
 			err:           app.ErrEmptyID,
 		},
 		"empty social group id": {
-			mockStorage: func(controller *gomock.Controller) app.Storage {
-				return mock.NewMockStorage(controller)
-			},
 			slotID:        slotID,
 			socialGroupID: emptyID,
 			err:           app.ErrEmptyID,
@@ -361,6 +398,19 @@ func TestRotator_SelectBanner(t *testing.T) {
 					Return(bannerID, nil)
 				return storage
 			},
+			mockEventQueue: func(controller *gomock.Controller) app.EventQueue {
+				eventQueue := mock.NewMockEventQueue(controller)
+				eventQueue.EXPECT().
+					Put(context.Background(), eventMatcher{event: app.Event{
+						Type:           app.EventSelect,
+						SlotID:         slotID,
+						BannerID:       bannerID,
+						SocialGroupID:  socialGroupID,
+						TimestampMicro: time.Now().UnixMicro(),
+					}}).
+					Return(nil)
+				return eventQueue
+			},
 			slotID:        slotID,
 			socialGroupID: socialGroupID,
 			wantID:        bannerID,
@@ -371,7 +421,15 @@ func TestRotator_SelectBanner(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
-			rotator := app.NewRotator(tt.mockStorage(controller))
+			var storage app.Storage = mock.NewMockStorage(controller)
+			if tt.mockStorage != nil {
+				storage = tt.mockStorage(controller)
+			}
+			var eventQueue app.EventQueue = mock.NewMockEventQueue(controller)
+			if tt.mockEventQueue != nil {
+				eventQueue = tt.mockEventQueue(controller)
+			}
+			rotator := app.NewRotator(storage, eventQueue)
 
 			gotID, err := rotator.SelectBanner(context.Background(), tt.slotID, tt.socialGroupID)
 
@@ -388,34 +446,26 @@ func TestRotator_SelectBanner(t *testing.T) {
 
 func TestRotator_ClickBanner(t *testing.T) {
 	tests := map[string]struct {
-		mockStorage   func(controller *gomock.Controller) app.Storage
-		slotID        string
-		bannerID      string
-		socialGroupID string
-		err           error
+		mockStorage    func(controller *gomock.Controller) app.Storage
+		mockEventQueue func(controller *gomock.Controller) app.EventQueue
+		slotID         string
+		bannerID       string
+		socialGroupID  string
+		err            error
 	}{
 		"empty slot id": {
-			mockStorage: func(controller *gomock.Controller) app.Storage {
-				return mock.NewMockStorage(controller)
-			},
 			slotID:        emptyID,
 			bannerID:      bannerID,
 			socialGroupID: socialGroupID,
 			err:           app.ErrEmptyID,
 		},
 		"empty banner id": {
-			mockStorage: func(controller *gomock.Controller) app.Storage {
-				return mock.NewMockStorage(controller)
-			},
 			slotID:        slotID,
 			bannerID:      emptyID,
 			socialGroupID: socialGroupID,
 			err:           app.ErrEmptyID,
 		},
 		"empty social group id": {
-			mockStorage: func(controller *gomock.Controller) app.Storage {
-				return mock.NewMockStorage(controller)
-			},
 			slotID:        slotID,
 			bannerID:      bannerID,
 			socialGroupID: emptyID,
@@ -442,6 +492,19 @@ func TestRotator_ClickBanner(t *testing.T) {
 					Return(nil)
 				return storage
 			},
+			mockEventQueue: func(controller *gomock.Controller) app.EventQueue {
+				eventQueue := mock.NewMockEventQueue(controller)
+				eventQueue.EXPECT().
+					Put(context.Background(), eventMatcher{event: app.Event{
+						Type:           app.EventClick,
+						SlotID:         slotID,
+						BannerID:       bannerID,
+						SocialGroupID:  socialGroupID,
+						TimestampMicro: time.Now().UnixMicro(),
+					}}).
+					Return(nil)
+				return eventQueue
+			},
 			slotID:        slotID,
 			bannerID:      bannerID,
 			socialGroupID: socialGroupID,
@@ -452,7 +515,15 @@ func TestRotator_ClickBanner(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			controller := gomock.NewController(t)
 			defer controller.Finish()
-			rotator := app.NewRotator(tt.mockStorage(controller))
+			var storage app.Storage = mock.NewMockStorage(controller)
+			if tt.mockStorage != nil {
+				storage = tt.mockStorage(controller)
+			}
+			var eventQueue app.EventQueue = mock.NewMockEventQueue(controller)
+			if tt.mockEventQueue != nil {
+				eventQueue = tt.mockEventQueue(controller)
+			}
+			rotator := app.NewRotator(storage, eventQueue)
 
 			err := rotator.ClickBanner(context.Background(), tt.slotID, tt.bannerID, tt.socialGroupID)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 var (
@@ -11,12 +12,13 @@ var (
 	ErrEmptyID          = errors.New("id is empty")
 )
 
-func NewRotator(storage Storage) Rotator {
-	return Rotator{storage: storage}
+func NewRotator(storage Storage, eventQueue EventQueue) Rotator {
+	return Rotator{storage: storage, eventQueue: eventQueue}
 }
 
 type Rotator struct {
-	storage Storage
+	storage    Storage
+	eventQueue EventQueue
 }
 
 func (r Rotator) CreateBanner(ctx context.Context, description string) (string, error) {
@@ -120,6 +122,14 @@ func (r Rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string)
 	if err != nil {
 		return "", fmt.Errorf("select banner error: %w", err)
 	}
+	// TODO: Log queue error?
+	err = r.eventQueue.Put(ctx, Event{
+		Type:           EventSelect,
+		SlotID:         slotID,
+		BannerID:       bannerID,
+		SocialGroupID:  socialGroupID,
+		TimestampMicro: time.Now().UnixMicro(),
+	})
 	return bannerID, nil
 }
 
@@ -136,5 +146,13 @@ func (r Rotator) ClickBanner(ctx context.Context, slotID, bannerID, socialGroupI
 	if err := r.storage.ClickBanner(ctx, slotID, bannerID, socialGroupID); err != nil {
 		return fmt.Errorf("click banner error: %w", err)
 	}
+	// TODO: Log queue error?
+	_ = r.eventQueue.Put(ctx, Event{
+		Type:           EventClick,
+		SlotID:         slotID,
+		BannerID:       bannerID,
+		SocialGroupID:  socialGroupID,
+		TimestampMicro: time.Now().UnixMicro(),
+	})
 	return nil
 }
