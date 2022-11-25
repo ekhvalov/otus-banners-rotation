@@ -1,3 +1,16 @@
+build:
+	go build -v -o ./bin/rotator ./cmd/rotator
+
+build-img-base:
+	docker build \
+		--tag $(DOCKER_IMG_BASE) \
+		--file build/base.Dockerfile .
+
+build-img:
+	docker build \
+		--tag "otus-golang/rotator:develop" \
+		--force-rm=true \
+		--file build/Dockerfile .
 
 generate:
 	go generate github.com/ekhvalov/otus-banners-rotation/internal/app
@@ -6,6 +19,9 @@ generate:
 
 test:
 	go test -race -count 100 ./internal/...
+
+test-integration: build-img
+	cd deployments/integration-tests && docker-compose up --exit-code-from tester && docker-compose down --volumes
 
 test-simple:
 	go test ./internal/...
@@ -16,4 +32,4 @@ install-lint-deps:
 lint: install-lint-deps
 	golangci-lint run ./...
 
-.PHONY: generate test test-simple lint
+.PHONY: build build-img generate test test-integration test-simple lint
