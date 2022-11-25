@@ -5,7 +5,9 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -157,6 +159,82 @@ func (s *rotatorSuite) Test_SelectBanner() {
 	s.Require().NoError(err)
 	s.Require().Equal(code.Code_OK, resp.GetStatus().GetCode())
 	s.Require().Equal(bannerID, resp.GetBannerId())
+}
+
+func (s *rotatorSuite) Test_AllBannersSelected() {
+	slotID := s.createSlot()
+	groupID := s.createSocialGroup()
+	banners := make(map[string]int)
+	bannersCount := 100
+	for i := 0; i < bannersCount; i++ {
+		bannerID := s.createBanner()
+		s.attachBanner(slotID, bannerID)
+		banners[bannerID] = 0
+	}
+
+	for i := 0; i < bannersCount; i++ {
+		resp, err := s.clientGrpc.SelectBanner(s.ctx, &grpcapi.SelectBannerRequest{
+			SlotId:        slotID,
+			SocialGroupId: groupID,
+		})
+		s.Require().NoError(err)
+		s.Require().Equal(code.Code_OK, resp.GetStatus().GetCode())
+		s.Require().NotEmpty(resp.GetBannerId())
+		banners[resp.GetBannerId()]++
+	}
+
+	for bannerID, count := range banners {
+		s.Require().Greater(count, 0, fmt.Sprintf("banner was not selecred: %s", bannerID))
+	}
+}
+
+func (s *rotatorSuite) Test_PopularBannerSelectedFrequently() {
+	slotID := s.createSlot()
+	socialGroupID := s.createSocialGroup()
+	bannersCTR := make(map[string]float64)
+	bannersCount := 100
+	popularBannerID := s.createBanner()
+	s.attachBanner(slotID, popularBannerID)
+	bannersCTR[popularBannerID] = 0.7
+	defaultCTR := 0.3
+	bannersSelects := make(map[string]int)
+	for i := 0; i < bannersCount-1; i++ {
+		bannerID := s.createBanner()
+		bannersCTR[bannerID] = defaultCTR
+		bannersSelects[bannerID] = 0
+	}
+
+	selectsTotal := bannersCount * 10
+	for i := 0; i < selectsTotal; i++ {
+		selectResponse, err := s.clientGrpc.SelectBanner(s.ctx, &grpcapi.SelectBannerRequest{
+			SlotId:        slotID,
+			SocialGroupId: socialGroupID,
+		})
+		s.Require().NoError(err)
+		s.Require().Equal(code.Code_OK, selectResponse.GetStatus().GetCode())
+		bannerID := selectResponse.GetBannerId()
+		s.Require().NotEmpty(bannerID)
+		bannersSelects[bannerID]++
+		if rand.Float64() < bannersCTR[bannerID] {
+			clickResponse, err := s.clientGrpc.ClickBanner(s.ctx, &grpcapi.ClickBannerRequest{
+				SlotId:        slotID,
+				BannerId:      bannerID,
+				SocialGroupId: socialGroupID,
+			})
+			s.Require().NoError(err)
+			s.Require().Equal(code.Code_OK, clickResponse.GetStatus().GetCode())
+		}
+	}
+
+	selectRatios := make([]float64, 0)
+	for _, selectsCount := range bannersSelects {
+		selectRatios = append(selectRatios, float64(selectsCount)/float64(selectsTotal))
+	}
+	sort.Float64s(selectRatios)
+	popularBannerRatio := float64(bannersSelects[popularBannerID]) / float64(selectsTotal)
+	s.Require().Equal(selectRatios[bannersCount-1], popularBannerRatio)
+	medianRatio := selectRatios[bannersCount/2]
+	s.Require().GreaterOrEqual(popularBannerRatio, medianRatio*15.0)
 }
 
 func (s *rotatorSuite) createBanner() string {
