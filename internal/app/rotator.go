@@ -13,15 +13,15 @@ var (
 )
 
 func NewRotator(storage Storage, eventQueue EventQueue) Rotator {
-	return Rotator{storage: storage, eventQueue: eventQueue}
+	return rotator{storage: storage, eventQueue: eventQueue}
 }
 
-type Rotator struct {
+type rotator struct {
 	storage    Storage
 	eventQueue EventQueue
 }
 
-func (r Rotator) CreateBanner(ctx context.Context, description string) (string, error) {
+func (r rotator) CreateBanner(ctx context.Context, description string) (string, error) {
 	if description == "" {
 		return "", ErrEmptyDescription
 	}
@@ -32,7 +32,7 @@ func (r Rotator) CreateBanner(ctx context.Context, description string) (string, 
 	return id, nil
 }
 
-func (r Rotator) DeleteBanner(ctx context.Context, id string) error {
+func (r rotator) DeleteBanner(ctx context.Context, id string) error {
 	if id == "" {
 		return ErrEmptyID
 	}
@@ -43,7 +43,7 @@ func (r Rotator) DeleteBanner(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r Rotator) CreateSlot(ctx context.Context, description string) (string, error) {
+func (r rotator) CreateSlot(ctx context.Context, description string) (string, error) {
 	if description == "" {
 		return "", ErrEmptyDescription
 	}
@@ -54,7 +54,7 @@ func (r Rotator) CreateSlot(ctx context.Context, description string) (string, er
 	return id, nil
 }
 
-func (r Rotator) DeleteSlot(ctx context.Context, id string) error {
+func (r rotator) DeleteSlot(ctx context.Context, id string) error {
 	if id == "" {
 		return ErrEmptyID
 	}
@@ -64,7 +64,7 @@ func (r Rotator) DeleteSlot(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r Rotator) CreateSocialGroup(ctx context.Context, description string) (string, error) {
+func (r rotator) CreateSocialGroup(ctx context.Context, description string) (string, error) {
 	if description == "" {
 		return "", ErrEmptyDescription
 	}
@@ -75,7 +75,7 @@ func (r Rotator) CreateSocialGroup(ctx context.Context, description string) (str
 	return id, nil
 }
 
-func (r Rotator) DeleteSocialGroup(ctx context.Context, id string) error {
+func (r rotator) DeleteSocialGroup(ctx context.Context, id string) error {
 	if id == "" {
 		return ErrEmptyID
 	}
@@ -85,7 +85,7 @@ func (r Rotator) DeleteSocialGroup(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r Rotator) AttachBanner(ctx context.Context, slotID, bannerID string) error {
+func (r rotator) AttachBanner(ctx context.Context, slotID, bannerID string) error {
 	if slotID == "" {
 		return fmt.Errorf("slot id error: %w", ErrEmptyID)
 	}
@@ -98,7 +98,7 @@ func (r Rotator) AttachBanner(ctx context.Context, slotID, bannerID string) erro
 	return nil
 }
 
-func (r Rotator) DetachBanner(ctx context.Context, slotID, bannerID string) error {
+func (r rotator) DetachBanner(ctx context.Context, slotID, bannerID string) error {
 	if slotID == "" {
 		return fmt.Errorf("slot id error: %w", ErrEmptyID)
 	}
@@ -111,7 +111,7 @@ func (r Rotator) DetachBanner(ctx context.Context, slotID, bannerID string) erro
 	return nil
 }
 
-func (r Rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string) (string, error) {
+func (r rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string) (string, error) {
 	if slotID == "" {
 		return "", fmt.Errorf("slot id error: %w", ErrEmptyID)
 	}
@@ -123,7 +123,7 @@ func (r Rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string)
 		return "", fmt.Errorf("select banner error: %w", err)
 	}
 	// TODO: Log queue error?
-	err = r.eventQueue.Put(ctx, Event{
+	_ = r.eventQueue.Put(ctx, Event{
 		Type:           EventSelect,
 		SlotID:         slotID,
 		BannerID:       bannerID,
@@ -133,7 +133,7 @@ func (r Rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string)
 	return bannerID, nil
 }
 
-func (r Rotator) ClickBanner(ctx context.Context, slotID, bannerID, socialGroupID string) error {
+func (r rotator) ClickBanner(ctx context.Context, slotID, bannerID, socialGroupID string) error {
 	if slotID == "" {
 		return fmt.Errorf("slot id error: %w", ErrEmptyID)
 	}
