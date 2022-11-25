@@ -313,11 +313,7 @@ func (s *redisSuite) Test_SelectClickBanner_Concurrent() {
 		actualSelects := s.hGetInt(selectsKey, bannerID)
 		s.Require().GreaterOrEqual(actualSelects, 1) // Every banner has selected at least once
 		s.Require().Equal(expectedSelects, actualSelects, fmt.Sprintf("selects mismatched (%s)", bannerID))
-		selectPercent := float64(actualSelects) / float64(selectsTotal)
-		if selectPercent > 1.0 {
-			fmt.Printf("%f\n", selectPercent)
-		}
-		selectsRatios = append(selectsRatios, selectPercent)
+		selectsRatios = append(selectsRatios, float64(actualSelects)/float64(selectsTotal))
 
 		actualScore := s.zScore(scoresKey, bannerID)
 		s.Require().NotEqual(math.Inf(1), actualScore)
