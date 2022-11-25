@@ -38,6 +38,10 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	stopCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	go func() {
+		s.server.GracefulStop()
+		cancel()
+	}()
 	select {
 	case <-ctx.Done():
 		s.server.Stop()
