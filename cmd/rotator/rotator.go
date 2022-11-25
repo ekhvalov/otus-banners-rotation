@@ -7,10 +7,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/config"
 	internalgrpc "github.com/ekhvalov/otus-banners-rotation/internal/environment/server/grpc"
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -36,7 +39,9 @@ func run() error {
 		return fmt.Errorf("create viper error: %w", err)
 	}
 
-	server := internalgrpc.NewServer(internalgrpc.NewConfig(v))
+	storage := createStorage(v)
+	queue := createEventQueue()
+	server := internalgrpc.NewServer(internalgrpc.NewConfig(v), app.NewRotator(storage, queue))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
@@ -49,8 +54,6 @@ func run() error {
 
 		if grpcErr := server.Shutdown(shutdownCtx); grpcErr != nil {
 			err = multierror.Append(err, grpcErr)
-
-			//logg.Error("failed to stop grpc server: " + grpcErr.Error())
 		}
 	}()
 
@@ -59,4 +62,18 @@ func run() error {
 	}
 
 	return err
+}
+
+func createStorage(v *viper.Viper) app.Storage {
+	return redis.NewRedis(redis.NewConfig(v), redis.NewUUIDGenerator())
+}
+
+func createEventQueue() app.EventQueue {
+	return eventQueue{}
+}
+
+type eventQueue struct{}
+
+func (q eventQueue) Put(_ context.Context, _ app.Event) error {
+	return nil
 }
