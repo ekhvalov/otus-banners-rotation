@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	rediscli "github.com/go-redis/redis/v9"
 )
 
@@ -18,6 +19,7 @@ const (
 func NewRedis(config Config, idGenerator IDGenerator) *Redis {
 	cli := rediscli.NewClient(&rediscli.Options{
 		Addr:     config.GetAddress(),
+		Username: config.GetUsername(),
 		Password: config.GetPassword(),
 		DB:       config.GetDatabase(),
 	})
@@ -67,14 +69,29 @@ func (r *Redis) DeleteSocialGroup(ctx context.Context, id string) error {
 }
 
 func (r *Redis) AttachBanner(ctx context.Context, slotID, bannerID string) error {
+	if err := r.hasBanner(ctx, bannerID); err != nil {
+		return err
+	}
+	if err := r.hasSlot(ctx, slotID); err != nil {
+		return err
+	}
 	return r.zAdd(ctx, makeSlotBannersKey(slotID), bannerID, math.Inf(1))
 }
 
 func (r *Redis) DetachBanner(ctx context.Context, slotID, bannerID string) error {
+	if err := r.hasBannerAttachedToSlot(ctx, slotID, bannerID); err != nil {
+		return err
+	}
 	return r.zRem(ctx, makeSlotBannersKey(slotID), bannerID)
 }
 
 func (r *Redis) SelectBanner(ctx context.Context, slotID, socialGroupID string) (bannerID string, err error) {
+	if err = r.hasSlot(ctx, slotID); err != nil {
+		return "", err
+	}
+	if err = r.hasSocialGroup(ctx, socialGroupID); err != nil {
+		return "", err
+	}
 	scoresKey := makeSlotSocialGroupScoresKey(slotID, socialGroupID)
 	keyCount, err := r.client.Exists(ctx, scoresKey).Result()
 	if err != nil {
@@ -118,6 +135,12 @@ func (r *Redis) SelectBanner(ctx context.Context, slotID, socialGroupID string) 
 }
 
 func (r *Redis) ClickBanner(ctx context.Context, slotID, bannerID, socialGroupID string) error {
+	if err := r.hasBannerAttachedToSlot(ctx, slotID, bannerID); err != nil {
+		return err
+	}
+	if err := r.hasSocialGroup(ctx, socialGroupID); err != nil {
+		return err
+	}
 	totalSelectsKey := makeSlotSocialGroupSelectsTotalKey(slotID, socialGroupID)
 	totalSelects, err := r.getInt64OrDefault(ctx, totalSelectsKey, 1)
 	if err != nil {
@@ -174,6 +197,52 @@ func (r *Redis) getInt64OrDefault(ctx context.Context, key string, defaultValue 
 func (r *Redis) hSet(ctx context.Context, key, field, value string) error {
 	if err := r.client.HSet(ctx, key, field, value).Err(); err != nil {
 		return fmt.Errorf("hset of '%s' '%s' error: %w", key, field, err)
+	}
+	return nil
+}
+
+func (r *Redis) hasBanner(ctx context.Context, bannerID string) error {
+	ok, err := r.client.HExists(ctx, keyBanners, bannerID).Result()
+	if err != nil {
+		return fmt.Errorf("hexists of '%s' '%s' error: %w", keyBanners, bannerID, err)
+	}
+	if !ok {
+		return app.NewErrNotFound(fmt.Sprintf("banner with id '%s' is not found", bannerID))
+	}
+	return nil
+}
+
+func (r *Redis) hasSlot(ctx context.Context, slotID string) error {
+	ok, err := r.client.HExists(ctx, keySlots, slotID).Result()
+	if err != nil {
+		return fmt.Errorf("hexists of '%s' '%s' error: %w", keySlots, slotID, err)
+	}
+	if !ok {
+		return app.NewErrNotFound(fmt.Sprintf("slot with id '%s' is not found", slotID))
+	}
+	return nil
+}
+
+func (r *Redis) hasSocialGroup(ctx context.Context, socialGroupID string) error {
+	ok, err := r.client.HExists(ctx, keySocialGroups, socialGroupID).Result()
+	if err != nil {
+		return fmt.Errorf("hexists of '%s' '%s' error: %w", keySocialGroups, socialGroupID, err)
+	}
+	if !ok {
+		return app.NewErrNotFound(fmt.Sprintf("socialGroup with id '%s' is not found", socialGroupID))
+	}
+	return nil
+}
+
+func (r *Redis) hasBannerAttachedToSlot(ctx context.Context, slotID, bannerID string) error {
+	if err := r.hasSlot(ctx, slotID); err != nil {
+		return err
+	}
+	if err := r.hasBanner(ctx, bannerID); err != nil {
+		return err
+	}
+	if cmd := r.client.ZScore(ctx, makeSlotBannersKey(slotID), bannerID); errors.Is(cmd.Err(), rediscli.Nil) {
+		return app.NewErrBannerNotAttached(slotID, bannerID)
 	}
 	return nil
 }

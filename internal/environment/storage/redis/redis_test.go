@@ -5,17 +5,29 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis/mock"
-	"github.com/golang/mock/gomock"
+	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	"math"
 	"math/rand"
+	"os"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis/mock"
 	rediscli "github.com/go-redis/redis/v9"
+	"github.com/golang/mock/gomock"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/suite"
+)
+
+const (
+	defaultRedisHost     = "localhost"
+	defaultRedisPort     = "6379"
+	defaultRedisUsername = ""
+	defaultRedisPassword = ""
+	defaultRedisDatabase = "10"
 )
 
 func TestRedisStorage(t *testing.T) {
@@ -28,6 +40,7 @@ type redisSuite struct {
 	cancel  context.CancelFunc
 	tick    time.Duration
 	waitFor time.Duration
+	cfg     Config
 	client  *rediscli.Client
 }
 
@@ -35,11 +48,12 @@ func (s *redisSuite) SetupSuite() {
 	s.tick = time.Millisecond * 100
 	s.waitFor = s.tick * 1000 * 30
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.cfg = makeConfig()
 	s.client = rediscli.NewClient(&rediscli.Options{
-		Addr:     "localhost:6379", // TODO: Get from ENV
-		Username: "",               // TODO: Get from ENV
-		Password: "",               // TODO: Get from ENV
-		DB:       0,                // TODO: Get from ENV
+		Addr:     s.cfg.GetAddress(),
+		Username: s.cfg.GetUsername(),
+		Password: s.cfg.GetPassword(),
+		DB:       s.cfg.GetDatabase(),
 	})
 }
 
@@ -54,7 +68,7 @@ func (s *redisSuite) TearDownTest() {
 func (s *redisSuite) Test_CreateBanner() {
 	bannerID := "100500"
 	description := "Banner description"
-	r := Redis{client: s.client, idGenerator: s.createIDGeneratorMock(bannerID)}
+	r := Redis{cfg: s.cfg, client: s.client, idGenerator: s.createIDGeneratorMock(bannerID)}
 
 	gotBannerID, err := r.CreateBanner(s.ctx, description)
 
@@ -66,7 +80,7 @@ func (s *redisSuite) Test_CreateBanner() {
 func (s *redisSuite) Test_DeleteBanner() {
 	bannerID := "100500"
 	s.hSet(keyBanners, bannerID, "description")
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	err := r.DeleteBanner(s.ctx, bannerID)
 
@@ -78,7 +92,7 @@ func (s *redisSuite) Test_DeleteBanner() {
 func (s *redisSuite) Test_CreateSlot() {
 	slotID := "100500"
 	description := "slot description"
-	r := Redis{client: s.client, idGenerator: s.createIDGeneratorMock(slotID)}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(slotID))
 
 	gotSlotID, err := r.CreateSlot(s.ctx, description)
 
@@ -90,7 +104,7 @@ func (s *redisSuite) Test_CreateSlot() {
 func (s *redisSuite) Test_DeleteSlot() {
 	slotID := "100500"
 	s.hSet(keySlots, slotID, "description")
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	err := r.DeleteSlot(s.ctx, slotID)
 
@@ -102,7 +116,7 @@ func (s *redisSuite) Test_DeleteSlot() {
 func (s *redisSuite) Test_CreateSocialGroup() {
 	socialGroupID := "100500"
 	description := "socialGroup description"
-	r := Redis{client: s.client, idGenerator: s.createIDGeneratorMock(socialGroupID)}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(socialGroupID))
 
 	gotSocialGroupID, err := r.CreateSocialGroup(s.ctx, description)
 
@@ -114,7 +128,7 @@ func (s *redisSuite) Test_CreateSocialGroup() {
 func (s *redisSuite) Test_DeleteSocialGroup() {
 	socialGroupID := "100500"
 	s.seedSocialGroup(socialGroupID)
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	err := r.DeleteSocialGroup(s.ctx, socialGroupID)
 
@@ -128,7 +142,7 @@ func (s *redisSuite) Test_AttachBanner() {
 	s.seedBanner(bannerID)
 	slotID := "100600"
 	s.seedSlot(slotID)
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	err := r.AttachBanner(s.ctx, slotID, bannerID)
 
@@ -138,9 +152,30 @@ func (s *redisSuite) Test_AttachBanner() {
 	s.Require().True(math.IsInf(bannerScore, 1))
 }
 
-func (s *redisSuite) Test_AttachBanner_Error() {
-	// TODO: Implement
-	s.Fail("not implemented")
+func (s *redisSuite) Test_AttachBanner_Error_BannerNotFound() {
+	bannerID := "100500"
+	slotID := "100600"
+	s.seedSlot(slotID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.AttachBanner(s.ctx, slotID, bannerID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+}
+
+func (s *redisSuite) Test_AttachBanner_Error_SlotNotFound() {
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	slotID := "100600"
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.AttachBanner(s.ctx, slotID, bannerID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
 }
 
 func (s *redisSuite) Test_DetachBanner() {
@@ -149,7 +184,7 @@ func (s *redisSuite) Test_DetachBanner() {
 	slotID := "100600"
 	s.seedSlot(slotID)
 	s.attachBanner(slotID, bannerID)
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	err := r.DetachBanner(s.ctx, slotID, bannerID)
 
@@ -158,9 +193,47 @@ func (s *redisSuite) Test_DetachBanner() {
 	s.Require().ErrorIs(rediscli.Nil, err)
 }
 
-func (s *redisSuite) Test_DetachBanner_Error() {
-	// TODO: Implement
-	s.Fail("not implemented")
+func (s *redisSuite) Test_DetachBanner_Error_SlotNotFound() {
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	slotID := "100600"
+	s.attachBanner(slotID, bannerID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.DetachBanner(s.ctx, slotID, bannerID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+}
+
+func (s *redisSuite) Test_DetachBanner_Error_BannerNotFound() {
+	bannerID := "100500"
+	//s.seedBanner(bannerID)
+	slotID := "100600"
+	s.seedSlot(slotID)
+	s.attachBanner(slotID, bannerID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.DetachBanner(s.ctx, slotID, bannerID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+}
+
+func (s *redisSuite) Test_DetachBanner_Error_BannerNotAttached() {
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	slotID := "100600"
+	s.seedSlot(slotID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.DetachBanner(s.ctx, slotID, bannerID)
+
+	s.Require().Error(err)
+	var errBannerNotAttached *app.ErrBannerNotAttached
+	s.Require().ErrorAs(err, &errBannerNotAttached)
 }
 
 func (s *redisSuite) Test_SelectBanner() {
@@ -173,7 +246,7 @@ func (s *redisSuite) Test_SelectBanner() {
 	}
 	socialGroupID := "100700"
 	s.seedSocialGroup(socialGroupID)
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
 	selectedBannerIDs := make([]string, len(bannerIDs))
 	for i := 0; i < len(selectedBannerIDs); i++ {
@@ -194,9 +267,30 @@ func (s *redisSuite) Test_SelectBanner() {
 	}
 }
 
-func (s *redisSuite) Test_SelectBanner_Error() {
-	// TODO: Implement
-	s.Fail("not implemented")
+func (s *redisSuite) Test_SelectBanner_Error_SlotNotFound() {
+	slotID := "100600"
+	socialGroupID := "100700"
+	s.seedSocialGroup(socialGroupID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	bannerID, err := r.SelectBanner(s.ctx, slotID, socialGroupID)
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+	s.Require().Empty(bannerID)
+}
+
+func (s *redisSuite) Test_SelectBanner_Error_SocialGroupNotFound() {
+	slotID := "100600"
+	s.seedSlot(slotID)
+	socialGroupID := "100700"
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	bannerID, err := r.SelectBanner(s.ctx, slotID, socialGroupID)
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+	s.Require().Empty(bannerID)
 }
 
 func (s *redisSuite) Test_ClickBanner() {
@@ -220,7 +314,7 @@ func (s *redisSuite) Test_ClickBanner() {
 	err = s.client.ZIncrBy(s.ctx, scoresKey, 0.0, bannerID).Err()
 	s.Require().NoError(err)
 
-	r := Redis{client: s.client}
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 	err = r.ClickBanner(s.ctx, slotID, bannerID, socialGroupID)
 
 	s.Require().NoError(err)
@@ -230,8 +324,66 @@ func (s *redisSuite) Test_ClickBanner() {
 	s.Require().Equal(calculateBannerScore(1, 1, 1), score, "score is invalid")
 }
 
-func (s *redisSuite) Test_ClickBanner_Error() {
+func (s *redisSuite) Test_ClickBanner_Error_BannerNotFound() {
+	slotID := "100600"
+	s.seedSlot(slotID)
+	bannerID := "100500"
+	socialGroupID := "100700"
+	s.seedSocialGroup(socialGroupID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
 
+	err := r.ClickBanner(s.ctx, slotID, bannerID, socialGroupID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+}
+
+func (s *redisSuite) Test_ClickBanner_Error_BannerNotAttached() {
+	slotID := "100600"
+	s.seedSlot(slotID)
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	socialGroupID := "100700"
+	s.seedSocialGroup(socialGroupID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.ClickBanner(s.ctx, slotID, bannerID, socialGroupID)
+
+	s.Require().Error(err)
+	var errBannerNotAttached *app.ErrBannerNotAttached
+	s.Require().ErrorAs(err, &errBannerNotAttached)
+}
+
+func (s *redisSuite) Test_ClickBanner_Error_SlotNotFound() {
+	slotID := "100600"
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	socialGroupID := "100700"
+	s.seedSocialGroup(socialGroupID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.ClickBanner(s.ctx, slotID, bannerID, socialGroupID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
+}
+
+func (s *redisSuite) Test_ClickBanner_Error_SocialGroupNotFound() {
+	slotID := "100600"
+	s.seedSlot(slotID)
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	s.attachBanner(slotID, bannerID)
+	socialGroupID := "100700"
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	err := r.ClickBanner(s.ctx, slotID, bannerID, socialGroupID)
+
+	s.Require().Error(err)
+	var errNotFound *app.ErrNotFound
+	s.Require().ErrorAs(err, &errNotFound)
 }
 
 func (s *redisSuite) Test_SelectClickBanner_Concurrent() {
@@ -262,10 +414,7 @@ func (s *redisSuite) Test_SelectClickBanner_Concurrent() {
 	bannersClicksCh := make(chan string, workersCount*selectsPerWorker)
 	bannersSelectsCh := make(chan string, workersCount*selectsPerWorker)
 	wg := sync.WaitGroup{}
-	r := &Redis{
-		client:      s.client,
-		idGenerator: NewUUIDGenerator(),
-	}
+	r := NewRedis(s.cfg, NewUUIDGenerator())
 	randomSeed := time.Now().UnixNano()
 	fmt.Println("random seed: ", randomSeed)
 	rand.Seed(randomSeed)
@@ -339,7 +488,9 @@ func (s *redisSuite) flushDB() {
 func (s *redisSuite) createIDGeneratorMock(id string) IDGenerator {
 	controller := gomock.NewController(s.T())
 	idGenerator := mock.NewMockIDGenerator(controller)
-	idGenerator.EXPECT().GenerateID().Return(id)
+	if id != "" {
+		idGenerator.EXPECT().GenerateID().Return(id)
+	}
 	return idGenerator
 }
 
@@ -412,4 +563,27 @@ func (s *redisSuite) zScore(key, field string) float64 {
 	score, err := s.client.ZScore(s.ctx, key, field).Result()
 	s.Require().NoError(err)
 	return score
+}
+
+func makeConfig() Config {
+	v := viper.New()
+	v.SetEnvPrefix("TESTS")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	defaults := map[string]string{
+		"TESTS_REDIS_HOST":     defaultRedisHost,
+		"TESTS_REDIS_PORT":     defaultRedisPort,
+		"TESTS_REDIS_USERNAME": defaultRedisUsername,
+		"TESTS_REDIS_PASSWORD": defaultRedisPassword,
+		"TESTS_REDIS_DATABASE": defaultRedisDatabase,
+	}
+	for envName, value := range defaults {
+		if _, ok := os.LookupEnv(envName); !ok {
+			err := os.Setenv(envName, value)
+			if err != nil {
+				panic(fmt.Errorf("set env error: %w", err))
+			}
+		}
+	}
+	return NewConfig(v)
 }
