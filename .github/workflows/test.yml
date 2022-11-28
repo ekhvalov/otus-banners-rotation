@@ -31,5 +31,8 @@ jobs:
           image: redis:7.0-alpine
           options: --publish 127.0.0.1:6379:6379
 
+      - name: Wait for redis is up
+        run: sleep 5
+
       - name: Test redis storage
         run: go test -v -tags=integration ./internal/environment/storage/redis/...
