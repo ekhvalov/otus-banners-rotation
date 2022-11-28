@@ -293,6 +293,21 @@ func (s *redisSuite) Test_SelectBanner_Error_SocialGroupNotFound() {
 	s.Require().Empty(bannerID)
 }
 
+func (s *redisSuite) Test_SelectBanner_Error_NoBannersFound() {
+	slotID := "100600"
+	s.seedSlot(slotID)
+	bannerID := "100500"
+	s.seedBanner(bannerID)
+	socialGroupID := "100700"
+	s.seedSocialGroup(socialGroupID)
+	r := NewRedis(s.cfg, s.createIDGeneratorMock(""))
+
+	bannerID, err := r.SelectBanner(s.ctx, slotID, socialGroupID)
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, app.ErrNoBannersFound)
+	s.Require().Empty(bannerID)
+}
+
 func (s *redisSuite) Test_ClickBanner() {
 	slotID := "100600"
 	s.seedSlot(slotID)

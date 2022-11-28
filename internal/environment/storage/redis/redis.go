@@ -109,7 +109,7 @@ func (r *Redis) SelectBanner(ctx context.Context, slotID, socialGroupID string) 
 		return "", fmt.Errorf("zrevrange of '%s' error: %w", scoresKey, err)
 	}
 	if len(bannerIDs) == 0 {
-		return "", fmt.Errorf("no banners found") // TODO: Define special error
+		return "", app.ErrNoBannersFound
 	}
 	bannerID = bannerIDs[0]
 	selectsKey := makeSlotSocialGroupSelectsKey(slotID, socialGroupID)

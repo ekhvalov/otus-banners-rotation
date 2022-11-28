@@ -7,8 +7,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
+
+var ErrNoBannersFound = errors.New("no banners found")
 
 func NewErrNotFound(message string) *ErrNotFound {
 	return &ErrNotFound{message: message}
