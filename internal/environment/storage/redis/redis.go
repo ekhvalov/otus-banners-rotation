@@ -21,10 +21,11 @@ func NewRedis(config Config, idGenerator IDGenerator) *Redis {
 		Password: config.GetPassword(),
 		DB:       config.GetDatabase(),
 	})
-	return &Redis{client: cli, idGenerator: idGenerator}
+	return &Redis{cfg: config, client: cli, idGenerator: idGenerator}
 }
 
 type Redis struct {
+	cfg         Config
 	client      *rediscli.Client
 	idGenerator IDGenerator
 }
@@ -81,7 +82,7 @@ func (r *Redis) SelectBanner(ctx context.Context, slotID, socialGroupID string) 
 	}
 	if keyCount == 0 {
 		slotBannersKey := makeSlotBannersKey(slotID)
-		err = r.client.Copy(ctx, slotBannersKey, scoresKey, 0, false).Err() // TODO: Get DB from config
+		err = r.client.Copy(ctx, slotBannersKey, scoresKey, r.cfg.GetDatabase(), false).Err()
 		if err != nil {
 			return "", fmt.Errorf("copy of '%s' to '%s' error: %w", slotBannersKey, scoresKey, err)
 		}
