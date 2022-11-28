@@ -40,8 +40,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	stopCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
-		s.server.GracefulStop()
-		cancel()
+		if s.server != nil {
+			s.server.GracefulStop()
+			cancel()
+		}
 	}()
 	select {
 	case <-ctx.Done():
