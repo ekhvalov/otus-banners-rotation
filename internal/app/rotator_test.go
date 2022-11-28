@@ -56,6 +56,7 @@ var testsCreateX = map[string]struct {
 	},
 }
 
+//nolint:dupl // Ignore duplication with TestRotator_CreateSlot
 func TestRotator_CreateBanner(t *testing.T) {
 	for testName, tt := range testsCreateX {
 		t.Run(testName, func(t *testing.T) {
@@ -82,6 +83,7 @@ func TestRotator_CreateBanner(t *testing.T) {
 	}
 }
 
+//nolint:dupl // Ignore duplication with TestRotator_CreateSocialGroup
 func TestRotator_CreateSlot(t *testing.T) {
 	for testName, tt := range testsCreateX {
 		t.Run(testName, func(t *testing.T) {
@@ -108,6 +110,7 @@ func TestRotator_CreateSlot(t *testing.T) {
 	}
 }
 
+//nolint:dupl // Ignore duplication with TestRotator_CreateBanner
 func TestRotator_CreateSocialGroup(t *testing.T) {
 	for testName, tt := range testsCreateX {
 		t.Run(testName, func(t *testing.T) {
