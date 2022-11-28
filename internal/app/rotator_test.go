@@ -67,7 +67,7 @@ func TestRotator_CreateBanner(t *testing.T) {
 					CreateBanner(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			got, err := rotator.CreateBanner(context.Background(), tt.description)
 
@@ -93,7 +93,7 @@ func TestRotator_CreateSlot(t *testing.T) {
 					CreateSlot(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			got, err := rotator.CreateSlot(context.Background(), tt.description)
 
@@ -119,7 +119,7 @@ func TestRotator_CreateSocialGroup(t *testing.T) {
 					CreateSocialGroup(context.Background(), tt.mockExpectDescription).
 					Return(tt.mockReturnID, tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			got, err := rotator.CreateSocialGroup(context.Background(), tt.description)
 
@@ -172,7 +172,7 @@ func TestRotator_DeleteBanner(t *testing.T) {
 					DeleteBanner(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			err := rotator.DeleteBanner(context.Background(), tt.id)
 
@@ -196,7 +196,7 @@ func TestRotator_DeleteSlot(t *testing.T) {
 					DeleteSlot(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			err := rotator.DeleteSlot(context.Background(), tt.id)
 
@@ -220,7 +220,7 @@ func TestRotator_DeleteSocialGroup(t *testing.T) {
 					DeleteSocialGroup(context.Background(), tt.mockExpectID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			err := rotator.DeleteSocialGroup(context.Background(), tt.id)
 
@@ -283,7 +283,7 @@ func TestRotator_AttachBanner(t *testing.T) {
 					AttachBanner(context.Background(), tt.mockExpectSlotID, tt.mockExpectBannerID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			err := rotator.AttachBanner(context.Background(), tt.slotID, tt.bannerID)
 
@@ -307,7 +307,7 @@ func TestRotator_DetachBanner(t *testing.T) {
 					DetachBanner(context.Background(), tt.mockExpectSlotID, tt.mockExpectBannerID).
 					Return(tt.mockReturnErr)
 			}
-			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller))
+			rotator := app.NewRotator(storage, mock.NewMockEventQueue(controller), mock.NewMockLogger(controller))
 
 			err := rotator.DetachBanner(context.Background(), tt.slotID, tt.bannerID)
 
@@ -429,7 +429,7 @@ func TestRotator_SelectBanner(t *testing.T) {
 			if tt.mockEventQueue != nil {
 				eventQueue = tt.mockEventQueue(controller)
 			}
-			rotator := app.NewRotator(storage, eventQueue)
+			rotator := app.NewRotator(storage, eventQueue, mock.NewMockLogger(controller))
 
 			gotID, err := rotator.SelectBanner(context.Background(), tt.slotID, tt.socialGroupID)
 
@@ -523,7 +523,7 @@ func TestRotator_ClickBanner(t *testing.T) {
 			if tt.mockEventQueue != nil {
 				eventQueue = tt.mockEventQueue(controller)
 			}
-			rotator := app.NewRotator(storage, eventQueue)
+			rotator := app.NewRotator(storage, eventQueue, mock.NewMockLogger(controller))
 
 			err := rotator.ClickBanner(context.Background(), tt.slotID, tt.bannerID, tt.socialGroupID)
 

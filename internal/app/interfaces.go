@@ -1,6 +1,7 @@
 //go:generate mockgen -destination=./mock/storage.gen.go -package mock . Storage
 //go:generate mockgen -destination=./mock/event_queue.gen.go -package mock . EventQueue
 //go:generate mockgen -destination=./mock/rotator.gen.go -package mock . Rotator
+//go:generate mockgen -destination=./mock/logger.gen.go -package mock . Logger
 
 package app
 
@@ -75,4 +76,11 @@ type EventQueue interface {
 
 type Rotator interface {
 	Storage
+}
+
+type Logger interface {
+	Debug(msg string)
+	Info(msg string)
+	Warn(msg string)
+	Error(msg string)
 }

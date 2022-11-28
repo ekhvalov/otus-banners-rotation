@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/config"
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/logger"
 	internalgrpc "github.com/ekhvalov/otus-banners-rotation/internal/environment/server/grpc"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis"
 	"github.com/hashicorp/go-multierror"
@@ -41,7 +43,9 @@ func run() error {
 
 	storage := createStorage(v)
 	queue := createEventQueue()
-	server := internalgrpc.NewServer(internalgrpc.NewConfig(v), app.NewRotator(storage, queue))
+	logg := createLogger(v)
+	rotator := app.NewRotator(storage, queue, logg)
+	server := internalgrpc.NewServer(internalgrpc.NewConfig(v), rotator, logg)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
@@ -70,6 +74,11 @@ func createStorage(v *viper.Viper) app.Storage {
 
 func createEventQueue() app.EventQueue {
 	return eventQueue{}
+}
+
+func createLogger(v *viper.Viper) app.Logger {
+	cfg := logger.NewConfig(v)
+	return logger.NewLogger(cfg, os.Stdout)
 }
 
 type eventQueue struct{}

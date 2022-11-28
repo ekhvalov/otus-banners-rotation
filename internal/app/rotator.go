@@ -12,13 +12,14 @@ var (
 	ErrEmptyID          = errors.New("id is empty")
 )
 
-func NewRotator(storage Storage, eventQueue EventQueue) Rotator {
-	return rotator{storage: storage, eventQueue: eventQueue}
+func NewRotator(storage Storage, eventQueue EventQueue, logger Logger) Rotator {
+	return rotator{storage: storage, eventQueue: eventQueue, logger: logger}
 }
 
 type rotator struct {
 	storage    Storage
 	eventQueue EventQueue
+	logger     Logger
 }
 
 func (r rotator) CreateBanner(ctx context.Context, description string) (string, error) {
@@ -122,14 +123,16 @@ func (r rotator) SelectBanner(ctx context.Context, slotID, socialGroupID string)
 	if err != nil {
 		return "", fmt.Errorf("select banner error: %w", err)
 	}
-	// TODO: Log queue error?
-	_ = r.eventQueue.Put(ctx, Event{
+	event := Event{
 		Type:           EventSelect,
 		SlotID:         slotID,
 		BannerID:       bannerID,
 		SocialGroupID:  socialGroupID,
 		TimestampMicro: time.Now().UnixMicro(),
-	})
+	}
+	if err = r.eventQueue.Put(ctx, event); err != nil {
+		r.logger.Error(fmt.Sprintf("put EventSelect to queue error: %v", err))
+	}
 	return bannerID, nil
 }
 
@@ -146,13 +149,15 @@ func (r rotator) ClickBanner(ctx context.Context, slotID, bannerID, socialGroupI
 	if err := r.storage.ClickBanner(ctx, slotID, bannerID, socialGroupID); err != nil {
 		return fmt.Errorf("click banner error: %w", err)
 	}
-	// TODO: Log queue error?
-	_ = r.eventQueue.Put(ctx, Event{
+	event := Event{
 		Type:           EventClick,
 		SlotID:         slotID,
 		BannerID:       bannerID,
 		SocialGroupID:  socialGroupID,
 		TimestampMicro: time.Now().UnixMicro(),
-	})
+	}
+	if err := r.eventQueue.Put(ctx, event); err != nil {
+		r.logger.Error(fmt.Sprintf("put EventClick to queue error: %v", err))
+	}
 	return nil
 }

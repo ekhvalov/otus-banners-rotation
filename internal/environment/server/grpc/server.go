@@ -13,14 +13,14 @@ import (
 //nolint:lll // Ignore long line
 //go:generate protoc ../../../../api/grpc/v1/rotator.proto -I ../../../../api/grpc  --go_out=../../../../pkg/api/grpc --go-grpc_out=../../../../pkg/api/grpc
 
-func NewServer(c Config, rotator app.Rotator) Server {
-	// TODO: Add logger?
-	return Server{config: c, rotator: rotator}
+func NewServer(c Config, rotator app.Rotator, logger app.Logger) Server {
+	return Server{config: c, rotator: rotator, logger: logger}
 }
 
 type Server struct {
 	config  Config
 	rotator app.Rotator
+	logger  app.Logger
 	server  *grpc.Server
 }
 
@@ -32,6 +32,7 @@ func (s *Server) ListenAndServe() error {
 	}
 	s.server = grpc.NewServer()
 	grpcapi.RegisterRotatorServer(s.server, &handler{rotator: s.rotator})
+	s.logger.Info(fmt.Sprintf("listen on: %s", address))
 	return s.server.Serve(listener)
 }
 
