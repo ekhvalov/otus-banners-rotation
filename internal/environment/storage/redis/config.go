@@ -26,10 +26,14 @@ func (c *Config) GetAddress() string {
 	return fmt.Sprintf("%s:%d", c.GetHost(), c.GetPort())
 }
 
+func (c *Config) GetUsername() string {
+	return c.v.GetString("redis.username")
+}
+
 func (c *Config) GetPassword() string {
 	return c.v.GetString("redis.password")
 }
 
 func (c *Config) GetDatabase() int {
-	return c.v.GetInt("redis.db")
+	return c.v.GetInt("redis.database")
 }
