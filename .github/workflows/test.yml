@@ -2,24 +2,34 @@ name: Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
 
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.18
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
 
-    - name: Lint
-      run: make lint
+      - name: Lint
+        run: make lint
 
-    - name: Test
-      run: make test
+      - name: Test
+        run: make test
+
+      - name: Run redis
+        uses: addnab/docker-run-action@v3
+        with:
+          image: redis:7.0-alpine
+          options: --ports 127.0.0.1:6379:6379
+
+      - name: Test redis storage
+        run: go test -v -tags=integration ./internal/environment/storage/redis/...
