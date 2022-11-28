@@ -10,8 +10,8 @@ import (
 	"fmt"
 )
 
-func NewErrNotFound(message string) ErrNotFound {
-	return ErrNotFound{message: message}
+func NewErrNotFound(message string) *ErrNotFound {
+	return &ErrNotFound{message: message}
 }
 
 type ErrNotFound struct {
@@ -22,8 +22,8 @@ func (e *ErrNotFound) Error() string {
 	return fmt.Sprintf("not found: %s", e.message)
 }
 
-func NewErrBannerNotAttached(slotID, bannerID string) ErrBannerNotAttached {
-	return ErrBannerNotAttached{slotID: slotID, bannerID: bannerID}
+func NewErrBannerNotAttached(slotID, bannerID string) *ErrBannerNotAttached {
+	return &ErrBannerNotAttached{slotID: slotID, bannerID: bannerID}
 }
 
 type ErrBannerNotAttached struct {
