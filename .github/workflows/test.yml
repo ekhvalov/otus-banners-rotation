@@ -29,7 +29,7 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: redis:7.0-alpine
-          options: --ports 127.0.0.1:6379:6379
+          options: --publish 127.0.0.1:6379:6379
 
       - name: Test redis storage
         run: go test -v -tags=integration ./internal/environment/storage/redis/...
