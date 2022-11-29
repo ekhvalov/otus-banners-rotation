@@ -5,6 +5,9 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"github.com/ekhvalov/otus-banners-rotation/internal/app"
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/config"
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/queue/rabbitmq"
 	"math/rand"
 	"os"
 	"sort"
@@ -19,8 +22,13 @@ import (
 )
 
 const (
-	defaultGrpcServerHost = "localhost"
-	defaultGrpcServerPort = "8081"
+	defaultGrpcServerHost    = "localhost"
+	defaultGrpcServerPort    = "8081"
+	defaultRabbitmqHost      = "localhost"
+	defaultRabbitmqPort      = "5672"
+	defaultRabbitmqUsername  = "guest"
+	defaultRabbitmqPassword  = "guest"
+	defaultRabbitmqQueueName = "events"
 )
 
 func TestRotator(t *testing.T) {
@@ -29,19 +37,20 @@ func TestRotator(t *testing.T) {
 
 type rotatorSuite struct {
 	suite.Suite
-	ctx          context.Context
-	cancel       context.CancelFunc
-	tick         time.Duration
-	waitFor      time.Duration
-	clientGrpc   grpcapi.RotatorClient
-	banners      map[string]struct{}
-	slots        map[string]struct{}
-	socialGroups map[string]struct{}
+	ctx           context.Context
+	cancel        context.CancelFunc
+	tick          time.Duration
+	waitFor       time.Duration
+	clientGrpc    grpcapi.RotatorClient
+	banners       map[string]struct{}
+	slots         map[string]struct{}
+	socialGroups  map[string]struct{}
+	queueConsumer *rabbitmq.Consumer
 }
 
 func (s *rotatorSuite) SetupSuite() {
 	s.tick = time.Millisecond * 100
-	s.waitFor = s.tick * 1000 * 30
+	s.waitFor = s.tick * 10 * 30
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.banners = make(map[string]struct{})
 	s.slots = make(map[string]struct{})
@@ -57,6 +66,8 @@ func (s *rotatorSuite) SetupSuite() {
 		return err == nil
 	}, s.waitFor, s.tick, fmt.Sprintf("grpc connection error: %v", err))
 	s.clientGrpc = grpcapi.NewRotatorClient(grpcConn)
+
+	s.queueConsumer = makeQueueConsumer()
 }
 
 func (s *rotatorSuite) TearDownSuite() {
@@ -237,6 +248,48 @@ func (s *rotatorSuite) Test_PopularBannerSelectedFrequently() {
 	s.Require().GreaterOrEqual(popularBannerRatio, medianRatio*15.0)
 }
 
+func (s *rotatorSuite) Test_QueueEvents() {
+	ctx, cancel := context.WithCancel(s.ctx)
+	defer cancel()
+	var eventsCh <-chan app.Event
+	var err error
+	s.Require().Eventually(func() bool {
+		eventsCh, err = s.queueConsumer.Subscribe(ctx)
+		return err == nil
+	}, s.waitFor, s.tick)
+	s.drainChannel(eventsCh)
+
+	slotID := s.createSlot()
+	bannerID := s.createBanner()
+	socialGroupID := s.createSocialGroup()
+	s.attachBanner(slotID, bannerID)
+
+	_, err = s.clientGrpc.SelectBanner(s.ctx, &grpcapi.SelectBannerRequest{
+		SlotId:        slotID,
+		SocialGroupId: socialGroupID,
+	})
+
+	s.Require().NoError(err)
+	event := s.getEvent(eventsCh)
+	s.Require().Equal(app.EventSelect, event.Type)
+	s.Require().Equal(bannerID, event.BannerID)
+	s.Require().Equal(slotID, event.SlotID)
+	s.Require().Equal(socialGroupID, event.SocialGroupID)
+
+	_, err = s.clientGrpc.ClickBanner(s.ctx, &grpcapi.ClickBannerRequest{
+		SlotId:        slotID,
+		BannerId:      bannerID,
+		SocialGroupId: socialGroupID,
+	})
+
+	s.Require().NoError(err)
+	event = s.getEvent(eventsCh)
+	s.Require().Equal(app.EventClick, event.Type)
+	s.Require().Equal(bannerID, event.BannerID)
+	s.Require().Equal(slotID, event.SlotID)
+	s.Require().Equal(socialGroupID, event.SocialGroupID)
+}
+
 func (s *rotatorSuite) createBanner() string {
 	description := generateDescription("Banner")
 	resp, err := s.clientGrpc.CreateBanner(s.ctx, &grpcapi.CreateBannerRequest{Description: description})
@@ -332,4 +385,57 @@ func getEnv(name, defaultValue string) string {
 
 func generateDescription(prefix string) string {
 	return fmt.Sprintf("%s %d", prefix, time.Now().UnixMicro())
+}
+
+func makeQueueConsumer() *rabbitmq.Consumer {
+	v, err := config.NewViper("", "TESTS", config.DefaultEnvKeyReplacer)
+	if err != nil {
+		panic(fmt.Sprintf("create viper error: %v", err))
+	}
+	cfg := rabbitmq.NewConfig(v)
+	defaults := map[string]string{
+		"TESTS_RABBITMQ_HOST":       defaultRabbitmqHost,
+		"TESTS_RABBITMQ_PORT":       defaultRabbitmqPort,
+		"TESTS_RABBITMQ_USERNAME":   defaultRabbitmqUsername,
+		"TESTS_RABBITMQ_PASSWORD":   defaultRabbitmqPassword,
+		"TESTS_RABBITMQ_QUEUE_NAME": defaultRabbitmqQueueName,
+	}
+	for key, value := range defaults {
+		if _, ok := os.LookupEnv(key); !ok {
+			err = os.Setenv(key, value)
+			if err != nil {
+				panic(fmt.Errorf("set env '%s' error: %w", key, err))
+			}
+		}
+	}
+	return rabbitmq.NewConsumer(cfg)
+}
+
+func (s *rotatorSuite) drainChannel(ch <-chan app.Event) {
+	for {
+		select {
+		case <-ch:
+		default:
+			timeout := time.NewTimer(s.tick * 10)
+			select {
+			case <-ch:
+				timeout.Stop()
+			case <-timeout.C:
+				return
+			}
+		}
+	}
+}
+
+func (s *rotatorSuite) getEvent(eventsCh <-chan app.Event) app.Event {
+	var event *app.Event
+	s.Require().Eventually(func() bool {
+		select {
+		case e := <-eventsCh:
+			event = &e
+		default:
+		}
+		return event != nil
+	}, s.waitFor, s.tick, "can not get an event from the queue")
+	return *event
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/ekhvalov/otus-banners-rotation/internal/app"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/config"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/logger"
+	"github.com/ekhvalov/otus-banners-rotation/internal/environment/queue/rabbitmq"
 	internalgrpc "github.com/ekhvalov/otus-banners-rotation/internal/environment/server/grpc"
 	"github.com/ekhvalov/otus-banners-rotation/internal/environment/storage/redis"
 	"github.com/hashicorp/go-multierror"
@@ -42,7 +43,7 @@ func run() error {
 	}
 
 	storage := createStorage(v)
-	queue := createEventQueue()
+	queue := createEventQueue(v)
 	logg := createLogger(v)
 	rotator := app.NewRotator(storage, queue, logg)
 	server := internalgrpc.NewServer(internalgrpc.NewConfig(v), rotator, logg)
@@ -69,20 +70,16 @@ func run() error {
 }
 
 func createStorage(v *viper.Viper) app.Storage {
-	return redis.NewRedis(redis.NewConfig(v), redis.NewUUIDGenerator())
+	cfg := redis.NewConfig(v)
+	return redis.NewRedis(cfg, redis.NewUUIDGenerator())
 }
 
-func createEventQueue() app.EventQueue {
-	return eventQueue{}
+func createEventQueue(v *viper.Viper) app.EventQueue {
+	cfg := rabbitmq.NewConfig(v)
+	return rabbitmq.NewProducer(cfg)
 }
 
 func createLogger(v *viper.Viper) app.Logger {
 	cfg := logger.NewConfig(v)
 	return logger.NewLogger(cfg, os.Stdout)
-}
-
-type eventQueue struct{}
-
-func (q eventQueue) Put(_ context.Context, _ app.Event) error {
-	return nil
 }

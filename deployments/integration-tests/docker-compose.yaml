@@ -5,6 +5,9 @@ services:
     volumes:
       - redis:/data
 
+  rabbitmq:
+    image: rabbitmq:3.11-alpine
+
   rotator:
     image: otus-golang/rotator:develop
 
@@ -15,10 +18,13 @@ services:
       - ../..:/usr/src/rotator
     environment:
       TESTS_GRPC_SERVER_HOST: rotator
+      TESTS_REDIS_HOST: redis
+      TESTS_RABBITMQ_HOST: rabbitmq
     depends_on:
       - redis
+      - rabbitmq
       - rotator
-    command: [ "go", "test", "-v", "-tags=integration", "./internal/tests/integration/..."]
+    command: [ "go", "test", "-v", "-tags=integration", "./internal/tests/integration/..." , "./internal/environment/storage/redis/..." ]
 
 volumes:
   redis:
