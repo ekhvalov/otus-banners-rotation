@@ -1,3 +1,6 @@
+//nolint:lll // Ignore long line
+//go:generate protoc ../../../../api/grpc/v1/rotator.proto -I ../../../../api/grpc  --go_out=../../../../pkg/api/grpc --go-grpc_out=../../../../pkg/api/grpc
+
 package internalgrpc
 
 import (
@@ -9,9 +12,6 @@ import (
 	grpcapi "github.com/ekhvalov/otus-banners-rotation/pkg/api/grpc"
 	"google.golang.org/grpc"
 )
-
-//nolint:lll // Ignore long line
-//go:generate protoc ../../../../api/grpc/v1/rotator.proto -I ../../../../api/grpc  --go_out=../../../../pkg/api/grpc --go-grpc_out=../../../../pkg/api/grpc
 
 func NewServer(c Config, rotator app.Rotator, logger app.Logger) Server {
 	return Server{config: c, rotator: rotator, logger: logger}
