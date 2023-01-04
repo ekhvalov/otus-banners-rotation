@@ -1,0 +1,17 @@
+[grpc]
+host = "localhost"
+port = 8081
+
+[rabbitmq]
+host = "localhost"
+port = 5672
+username = "guest"
+password = "guest"
+queue_name = "events"
+
+[redis]
+host = "localhost"
+port = 6379
+username = ""
+password = ""
+database = 0

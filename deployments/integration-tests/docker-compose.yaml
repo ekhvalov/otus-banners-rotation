@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:7.0-alpine
+    volumes:
+      - redis:/data
+
+  rabbitmq:
+    image: rabbitmq:3.11-alpine
+
+  rotator:
+    image: otus-golang/rotator:develop
+
+  tester:
+    image: golang:1.19.3
+    working_dir: /usr/src/rotator
+    volumes:
+      - ../..:/usr/src/rotator
+    environment:
+      TESTS_GRPC_SERVER_HOST: rotator
+      TESTS_REDIS_HOST: redis
+      TESTS_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      - redis
+      - rabbitmq
+      - rotator
+    command: [ "go", "test", "-v", "-tags=integration", "./internal/tests/integration/..." , "./internal/environment/storage/redis/..." ]
+
+volumes:
+  redis:

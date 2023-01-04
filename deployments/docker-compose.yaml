@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:7.0-alpine
+    volumes:
+      - redis:/data
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3.11-alpine
+    ports:
+      - "5672:5672"
+
+  rotator:
+    image: otus-golang/rotator:develop
+    ports:
+      - "8081:8081"
+
+volumes:
+  redis:
